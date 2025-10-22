@@ -80,3 +80,26 @@ class TimerPanel(QWidget):
                 self.current_time = parsed["value"]
                 self.timer_label.setText(self.current_time)
             self.log.append(f"{parsed['type'].capitalize()}: {parsed['value']}")
+            def poll_serial(self):
+    try:
+        line = self.serial_mgr.read_line()
+        if line:
+            parsed = self.protocol.parse_response(line)
+            if parsed["type"] == "time":
+                self.current_time = parsed["value"]
+                self.timer_label.setText(self.current_time)
+            self.log.append(f"{parsed['type'].capitalize()}: {parsed['value']}")
+    except Exception as e:
+        self.log.append(f"Error: {str(e)}")
+        self.handle_connection_error()
+
+def handle_connection_error(self):
+    if self.serial_mgr.connected:
+        self.serial_mgr.disconnect()
+        self.connect_btn.setText("Connect")
+        self.log.append("Connection lost - attempting to reconnect...")
+        QTimer.singleShot(5000, self.attempt_reconnect)
+
+def attempt_reconnect(self):
+    if not self.serial_mgr.connected:
+        self.handle_connect()
