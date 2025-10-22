@@ -1,9 +1,10 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import sys
+import os
 
 # Configure logging
 logging.basicConfig(
@@ -24,52 +25,59 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Root endpoint
+def get_current_time():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+def get_user():
+    return "alexmack12343-cmyk"
+
 @app.get("/")
 async def root():
     return {
         "message": "Welcome to Time Machine API",
         "version": "1.0.0",
-        "currentTime": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-        "user": "alexmack12343-cmyk"
+        "currentTime": get_current_time(),
+        "user": get_user(),
+        "project_id": "prj_9diwl2BK49d5XzxbZQW9eSXyptsn"
     }
 
-# Health check endpoint
-@app.get("/health")
-async def health():
-    return {
-        "status": "healthy",
-        "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-        "user": "alexmack12343-cmyk"
-    }
-
-# API endpoints
 @app.get("/api")
 async def api_root():
     return {
         "message": "Time Machine API endpoint",
-        "currentTime": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+        "currentTime": get_current_time(),
+        "user": get_user(),
         "endpoints": [
             "/",
-            "/health",
             "/api",
             "/api/time",
-            "/api/user"
+            "/api/user",
+            "/api/health"
         ]
     }
 
 @app.get("/api/time")
-async def get_time():
+async def get_current_timestamp():
     return {
-        "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-        "timezone": "UTC"
+        "timestamp": get_current_time(),
+        "timezone": "UTC",
+        "user": get_user()
+    }
+
+@app.get("/api/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "timestamp": get_current_time(),
+        "user": get_user(),
+        "environment": os.getenv("VERCEL_ENV", "development")
     }
 
 @app.get("/api/user")
-async def get_user():
+async def user_info():
     return {
-        "login": "alexmack12343-cmyk",
-        "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        "login": get_user(),
+        "timestamp": get_current_time()
     }
 
 # Error handling
@@ -80,23 +88,17 @@ async def not_found_handler(request: Request, exc: HTTPException):
         content={
             "error": "Not Found",
             "message": f"The requested path '{request.url.path}' was not found",
+            "currentTime": get_current_time(),
+            "user": get_user(),
             "availableEndpoints": [
                 "/",
-                "/health",
                 "/api",
                 "/api/time",
-                "/api/user"
-            ],
-            "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                "/api/user",
+                "/api/health"
+            ]
         }
     )
-
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    logger.info(f"Incoming request: {request.method} {request.url.path}")
-    response = await call_next(request)
-    logger.info(f"Response status: {response.status_code}")
-    return response
 
 # Export for Vercel serverless function
 from mangum import Mangum
@@ -105,4 +107,4 @@ handler = Mangum(app)
 # For local development
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+    uvicorn.run(app, host="0.0.0.0", port=3000, reload=True)
