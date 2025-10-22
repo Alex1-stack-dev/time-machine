@@ -10,8 +10,10 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.timer_panel = TimerPanel()
         self.entries_panel = EntriesPanel()
-        self.results_panel = ResultsPanel(results_panel=self.results_panel, entries_panel=self.entries_panel)
+        self.results_panel = ResultsPanel(results_panel=self.results_panel, 
+entries_panel=self.entries_panel)
         self.tabs.addTab(self.timer_panel, "Timer")
         self.tabs.addTab(self.entries_panel, "Entries")
         self.tabs.addTab(self.results_panel, "Results")
         self.setCentralWidget(self.tabs)
+        
