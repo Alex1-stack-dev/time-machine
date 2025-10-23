@@ -1,4 +1,0 @@
-Build Command: pip install -r requirements.txt
-Output Directory: api
-Install Command: pip install -r requirements.txt
-Development Command: uvicorn api.index:app --host 0.0.0.0 --port 3000 --reload
