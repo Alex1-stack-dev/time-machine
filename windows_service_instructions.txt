@@ -1,0 +1,6 @@
+To run the app as a Windows Service or scheduled background process:
+- Use NSSM (Non-Sucking Service Manager) or sc.exe to register the exe or a Python script as a service.
+- Example with NSSM:
+  1. Download NSSM.
+  2. nssm install TimeMachine "C:\Path\To\python.exe" "C:\Path\To\main.py"
+  3. Configure working directory and start the service.
