@@ -1,6 +1,28 @@
-__pycache__
-*.pyc
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+.venv/
+venv/
+.venv-build/
+
+# Distribution / build
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Secrets / config
 .env
-.env.local
-.vercel
-node_modules
+*.sqlite
+data/
+backups/
+logs/
