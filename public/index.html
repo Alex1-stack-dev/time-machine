@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Time Machine — Home</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding: 2rem; background:#f7f7fb; color:#111; }
+    .card { background:#fff; padding:1rem 1.25rem; border-radius:8px; box-shadow:0 4px 20px rgba(12,20,40,0.06); max-width:720px; margin:0 auto;}
+    h1 { margin-top:0; }
+    pre { background:#0b1220; color:#e6f2ff; padding:0.75rem; border-radius:6px; overflow:auto; }
+    .endpoints { margin-top:1rem; }
+    button { margin-top:0.75rem; padding:0.5rem 0.75rem; border-radius:6px; border:1px solid #ddd; background:#fff; cursor:pointer;}
+    a { color: #0b66ff; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Time Machine</h1>
+    <p id="status">Loading current time…</p>
+    <pre id="json">{}</pre>
+    <div class="endpoints">
+      <strong>API endpoints</strong>
+      <ul>
+        <li><a href="/api/">/api/</a></li>
+        <li><a href="/api/time">/api/time</a></li>
+        <li><a href="/api/user">/api/user</a></li>
+        <li><a href="/api/health">/api/health</a></li>
+      </ul>
+      <button id="refresh">Refresh now</button>
+    </div>
+  </div>
+
+  <script>
+    async function fetchTime() {
+      try {
+        const res = await fetch('/api/time');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const text = data.timestamp ? data.timestamp : JSON.stringify(data);
+        document.getElementById('status').textContent = 'Current time (from /api/time): ' + text;
+        document.getElementById('json').textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        document.getElementById('status').textContent = 'Error fetching API: ' + err.message;
+        document.getElementById('json').textContent = '{}';
+      }
+    }
+
+    document.getElementById('refresh').addEventListener('click', fetchTime);
+    // initial load + 30s auto-refresh
+    fetchTime();
+    setInterval(fetchTime, 30000);
+  </script>
+</body>
+</html>
