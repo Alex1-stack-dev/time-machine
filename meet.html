@@ -1,0 +1,112 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Time Machine — Meet</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 1rem; max-width:1000px; margin:auto; }
+    input, button { padding: 0.5rem; margin: 0.25rem; }
+    table { border-collapse: collapse; width:100%; }
+    td, th { border: 1px solid #ddd; padding: 0.5rem; }
+    pre { background: #f3f3f3; padding: 0.5rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Time Machine — Meet Control</h1>
+  <div>
+    <button id="start">Start Meet</button>
+    <button id="stop">Stop Meet</button>
+  </div>
+
+  <h2>Entries</h2>
+  <div>
+    <input id="name" placeholder="Name">
+    <input id="lane" placeholder="Lane" type="number">
+    <input id="heat" placeholder="Heat" type="number">
+    <button id="add">Add Entry</button>
+  </div>
+  <table id="entries">
+    <thead><tr><th>ID</th><th>Name</th><th>Lane</th><th>Heat</th><th>Record Finish</th></tr></thead>
+    <tbody></tbody>
+  </table>
+
+  <h2>Events</h2>
+  <pre id="events"></pre>
+
+  <h2>Results</h2>
+  <pre id="results"></pre>
+
+  <script>
+    const api = (path, opts) => fetch('/api' + path, opts).then(r => {
+      if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+      return r.json();
+    });
+
+    async function refreshEntries(){
+      try {
+        const entries = await api('/meet/entries');
+        const tbody = document.querySelector('#entries tbody');
+        tbody.innerHTML = '';
+        entries.forEach(e => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${e.id}</td><td>${e.name}</td><td>${e.lane}</td><td>${e.heat}</td>
+            <td><button data-id="${e.id}" class="finish">Finish</button></td>`;
+          tbody.appendChild(tr);
+        });
+        document.querySelectorAll('.finish').forEach(btn=>{
+          btn.onclick = async () => {
+            const id = btn.dataset.id;
+            await fetch('/api/meet/event', {
+              method: 'POST',
+              headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({entry_id: Number(id), type: 'finish'})
+            });
+            refreshEvents(); refreshResults();
+          };
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function refreshEvents(){
+      try {
+        const ev = await api('/meet/events');
+        document.getElementById('events').textContent = JSON.stringify(ev, null, 2);
+      } catch (err) { document.getElementById('events').textContent = err.message; }
+    }
+
+    async function refreshResults(){
+      try {
+        const r = await api('/meet/results');
+        document.getElementById('results').textContent = JSON.stringify(r, null, 2);
+      } catch (err) { document.getElementById('results').textContent = err.message; }
+    }
+
+    document.getElementById('add').onclick = async () => {
+      const name = document.getElementById('name').value;
+      const lane = Number(document.getElementById('lane').value || 0);
+      const heat = Number(document.getElementById('heat').value || 0);
+      if (!name) return alert('Please enter a name');
+      await fetch('/api/meet/entries', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({name, lane, heat})
+      });
+      document.getElementById('name').value='';
+      refreshEntries();
+    };
+
+    document.getElementById('start').onclick = async () => {
+      try { await fetch('/api/meet/start', {method:'POST'}); } catch(e){ alert(e.message) }
+    };
+    document.getElementById('stop').onclick = async () => {
+      try { await fetch('/api/meet/stop', {method:'POST'}); refreshResults(); } catch(e){ alert(e.message) }
+    };
+
+    // initial load
+    refreshEntries(); refreshEvents(); refreshResults();
+    setInterval(refreshEvents, 2000);
+  </script>
+</body>
+</html>
