@@ -1,45 +1,57 @@
-# Time Machine G2 Raceclock Controller
+```markdown
+# Time Machine — Quick Start (very simple)
 
-A cross-platform desktop app for fully controlling the Electro-Numerics Raceclock Time Machine G2.  
-Features real-time serial comms, CSV import, PDF/.hy3 export, event seeding, DQ management, and direct thermal printing.
+This repo contains a local desktop-style app that runs a small web UI and a local server to control/record meet events.
 
-## Features
+Before you start:
+- Copy `.env.example` to `.env` and set `API_KEY` to a long random string.
+- Keep `.env` private (do not commit it).
 
-- RS-232/USB serial communication with Raceclock G2
-- Live timer display and full control (start, stop, reset, splits)
-- Import entries from CSV; seed events and heats
-- Export results as PDF, Hy-Tek Meet Manager (.hy3)
-- Manage DQs, heats, psych sheets
-- Print results to the Time Machine's thermal printer
-- Event logging and robust error handling
-- Cross-platform: Windows, Linux, macOS
+How to run this on your computer (easy / like I'm 5)
 
-## Developer Setup
+1) Get the code:
+- Click "Code" on GitHub → "Download ZIP" or run:
+  - git clone https://github.com/<your-user>/time-machine.git
+  - cd time-machine
 
-```bash
-git clone https://github.com/YOUR-USER/raceclock-g2-controller.git
-cd raceclock-g2-controller
-python -m venv env
-source env/bin/activate   # or .\env\Scripts\activate on Windows
-pip install -r requirements.txt
-python main.py
+2) Make a little private space for the app (virtualenv):
+- On macOS / Linux:
+  - python3 -m venv .venv
+  - source .venv/bin/activate
+- On Windows (PowerShell):
+  - python -m venv .venv
+  - .\.venv\Scripts\Activate.ps1
+
+3) Tell pip to get the right pieces:
+- pip install --upgrade pip
+- pip install -r requirements.txt
+
+4) Make a private file with your secret key:
+- Copy .env.example to .env, then edit .env
+  - On macOS / Linux: cp .env.example .env && nano .env
+  - On Windows (PowerShell): copy .env.example .env; notepad .env
+- Put a long random string for API_KEY (keeps admin actions safe)
+
+5) Start the app (the launcher starts a local server and opens a browser):
+- python main.py
+- A browser window/tab should open at: http://127.0.0.1:8000/meet.html
+
+6) If you prefer to run server directly:
+- uvicorn server:app --host 127.0.0.1 --port 8000 --reload
+- Then open: http://127.0.0.1:8000/meet.html
+
+What the UI does (simple)
+- Add runners (Entries)
+- Start / Stop meet
+- Record finishes
+- View events and results
+
+If you make changes and want to build a Windows .exe (optional)
+- I included a GitHub Actions workflow that builds a Windows bundle (cx_Freeze) and uploads it as a zip artifact.
+- Or build locally on Windows using `windows_local_build.bat` or `setup_cx_freeze.py`.
+
+Safety tips before using on real hardware
+- Test in a spare machine or VM first.
+- Make sure serial drivers for your raceclock are installed.
+- Use a strong API_KEY and do not expose the app to the public Internet without TLS and proper auth.
 ```
-
-## File Structure
-
-- `main.py` – App entry point
-- `gui/` – All GUI panels, PyQt5/6 widgets
-- `core/` – Serial comms, protocol, hardware integration
-- `io/` – File import/export (CSV, PDF, HY3)
-- `utils/` – Error handling, installer
-- `tests/` – Unit tests
-- `resources/` – Icons and static assets
-
-## Contributing
-
-Pull requests welcome!  
-Please open issues for bugs and feature requests.
-
-## License
-
-[MIT](LICENSE)
