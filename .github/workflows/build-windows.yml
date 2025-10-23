@@ -1,0 +1,55 @@
+# GitHub Actions workflow to build a Windows .zip containing a standalone .exe using cx_Freeze
+name: Build Windows Executable
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  build-windows:
+    name: Build Windows EXE (cx_Freeze)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements.txt || echo "requirements.txt may be missing or empty"
+          python -m pip install cx-Freeze==6.14
+
+      - name: Run cx_Freeze build
+        run: |
+          python setup_cx_freeze.py build
+
+      - name: Compress and upload artifact
+        shell: pwsh
+        run: |
+          $zipname = "time-machine-windows.zip"
+          if (Test-Path build) {
+            if (Test-Path $zipname) { Remove-Item $zipname -Force }
+            Compress-Archive -Path build\* -DestinationPath $zipname -Force
+            Write-Host "Created zip:" $zipname
+            echo "::set-output name=zip::$zipname"
+          } else {
+            Write-Error "Build folder not found. Build may have failed."
+            exit 1
+          }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: time-machine-windows
+          path: time-machine-windows.zip
