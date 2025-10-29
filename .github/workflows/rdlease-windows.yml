@@ -1,0 +1,91 @@
+name: Build and Release Windows installers
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install WiX Toolset
+        run: |
+          $wixUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311.exe"
+          Invoke-WebRequest -Uri $wixUrl -OutFile wix311.exe
+          Start-Process -FilePath .\wix311.exe -ArgumentList "/install","/quiet" -Wait
+          echo "C:\Program Files (x86)\WiX Toolset v3.11\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install build deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install psutil
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed --add-data "assets/splash.png;assets" --icon "assets/icon.ico" --name time-machine src/main.py
+          pyinstaller --noconfirm --clean --onefile --console --name time-machine-updater src/updater.py
+
+      - name: Build MSI
+        run: |
+          mkdir build-msi
+          copy dist\time-machine.exe build-msi\
+          copy dist\time-machine-updater.exe build-msi\
+          candle -arch x64 -dBinDir=build-msi installer\wix\product.wxs -out build-msi\product.wixobj
+          light -ext WixUIExtension build-msi\product.wixobj -out artifacts\TimeMachine-Setup.msi
+        shell: cmd
+
+      - name: Compute SHA256
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          cp dist/time-machine.exe artifacts/
+          cp dist/time-machine-updater.exe artifacts/
+          sha256sum artifacts/time-machine.exe | awk '{print $1 "  " $2}' > artifacts/time-machine.exe.sha256
+          sha256sum artifacts/time-machine-updater.exe | awk '{print $1 "  " $2}' > artifacts/time-machine-updater.exe.sha256
+          sha256sum artifacts/TimeMachine-Setup.msi | awk '{print $1 "  " $2}' > artifacts/TimeMachine-Setup.msi.sha256
+          ls -la artifacts
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          body: |
+            Time Machine ${{ github.ref_name }}
+            
+            Installation Options:
+            1. MSI Installer (Recommended)
+               - Download TimeMachine-Setup.msi
+               - Run the installer
+               - Program will be installed to %LOCALAPPDATA%\TimeMachine
+               - Start menu shortcuts created
+               - Automatic updates supported
+            
+            2. Portable EXE
+               - Download time-machine.exe
+               - Run from any location
+               - Updates download to %LOCALAPPDATA%\TimeMachine\updates
+            
+            SHA256 checksums provided in .sha256 files
+          draft: false
+          prerelease: false
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
