@@ -1,72 +1,105 @@
-# Update: install a matching cx-Freeze version explicitly on the Windows runner
 name: Build Windows Executable
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
-  release:
-    types: [published]
 
 jobs:
-  build-windows:
-    name: Build Windows EXE (cx_Freeze)
+  build:
     runs-on: windows-latest
+
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        architecture: 'x64'
 
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
+    - name: Create Directory Structure
+      run: |
+        mkdir -p src/timing
+        mkdir -p src/gui
+        mkdir -p src/reports
+        mkdir -p assets
+        mkdir -p installer/wix
 
-      - name: Install dependencies (without cx-Freeze)
-        run: |
-          python -m pip install -r requirements.txt || echo "requirements.txt may be missing or empty"
-          # Install a specific, available cx-Freeze version only on the Windows runner:
-          python -m pip install "cx-Freeze==6.15.16"
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        # Additional dependencies for G2 integration
+        pip install pyserial
+        pip install reportlab
+        pip install psutil
+        pip install packaging
 
-      - name: Run cx_Freeze build
-        run: |
-          python setup_cx_freeze.py build
+    - name: Update requirements.txt
+      run: |
+        echo "pyinstaller==5.14" > requirements.txt
+        echo "PySide6==6.7.1" >> requirements.txt
+        echo "requests==2.31.0" >> requirements.txt
+        echo "packaging==24.0" >> requirements.txt
+        echo "pyserial==3.5" >> requirements.txt
+        echo "reportlab==4.0.7" >> requirements.txt
+        echo "psutil==5.9.8" >> requirements.txt
 
-      - name: Show build output (diagnostics)
-        shell: pwsh
-        run: |
-          Write-Host "==== Listing repo root ===="
-          Get-ChildItem -Force -Recurse -Depth 1 | ForEach-Object { Write-Host $_ }
-          Write-Host "==== Listing 'build' directory (if exists) ===="
-          if (Test-Path build) {
-            Get-ChildItem -Path build -Recurse | ForEach-Object { Write-Host $_ }
-          } else {
-            Write-Host "No build directory found"
-          }
-          Write-Host "==== Python info ===="
-          python -V
-          python -m pip --version
-          Write-Host "==== Installed packages (top 50) ===="
-          python -m pip list --format=columns | Select-Object -First 50 | ForEach-Object { Write-Host $_ }
+    - name: Generate Assets
+      run: |
+        python src/assets/generate_full_assets.py
 
-      - name: Compress and upload artifact
-        shell: pwsh
-        run: |
-          $zipname = "time-machine-windows.zip"
-          if (Test-Path build) {
-            if (Test-Path $zipname) { Remove-Item $zipname -Force }
-            Compress-Archive -Path build\* -DestinationPath $zipname -Force
-            Write-Host "Created zip:" $zipname
-          } else {
-            Write-Error "Build folder not found. Build may have failed."
-            exit 1
-          }
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller --noconfirm --onefile --windowed `
+          --add-data "assets;assets" `
+          --add-data "src/timing;timing" `
+          --add-data "src/gui;gui" `
+          --add-data "src/reports;reports" `
+          --icon "assets/icon.ico" `
+          --name time-machine `
+          src/main.py
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: time-machine-windows
-          path: time-machine-windows.zip
+    - name: Create Distribution Directory
+      run: |
+        mkdir dist-package
+        copy dist\time-machine.exe dist-package\
+        copy assets\* dist-package\
+        copy README.md dist-package\
+        copy CHANGELOG.md dist-package\
+
+    - name: Create ZIP archive
+      run: |
+        Compress-Archive -Path dist-package\* -DestinationPath time-machine-windows.zip
+
+    - name: Upload Build Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: time-machine-windows
+        path: time-machine-windows.zip
+
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./time-machine-windows.zip
+        asset_name: time-machine-windows.zip
+        asset_content_type: application/zip
