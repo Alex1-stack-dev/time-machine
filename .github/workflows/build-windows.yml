@@ -1,8 +1,14 @@
+# Time Machine Build Workflow
+# Last updated: 2025-10-29 19:25:14 UTC
+# Repository: Alex1-stack-dev/time-machine
+
 name: Build Windows Executable
 
 on:
   push:
     branches: [ main ]
+    tags:
+      - 'v*.*.*'
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -11,101 +17,250 @@ jobs:
   build:
     runs-on: windows-latest
 
+    permissions:
+      contents: write
+      actions: read
+
+    env:
+      OWNER: kuhafsoiusygdfouysd
+      BUILD_TIMESTAMP: '2025-10-29 19:25:14'
+
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
     - name: Set up Python 3.11
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
         architecture: 'x64'
+        cache: 'pip'
+        cache-dependency-path: 'requirements.txt'
 
-    - name: Create Directory Structure
+    - name: Verify Directory Structure
       run: |
-        mkdir -p src/timing
-        mkdir -p src/gui
-        mkdir -p src/reports
-        mkdir -p assets
-        mkdir -p installer/wix
+        $directories = @(
+          "src/timing",
+          "src/gui",
+          "src/reports",
+          "assets",
+          "installer/wix"
+        )
+        
+        foreach ($dir in $directories) {
+          if (!(Test-Path $dir)) {
+            New-Item -Path $dir -ItemType Directory -Force
+            Write-Host "Created directory: $dir"
+          } else {
+            Write-Host "Directory exists: $dir"
+          }
+        }
+        
+        # Verify critical files exist
+        $requiredFiles = @(
+          "src/main.py",
+          "requirements.txt"
+        )
+        
+        foreach ($file in $requiredFiles) {
+          if (!(Test-Path $file)) {
+            throw "Critical file missing: $file"
+          } else {
+            Write-Host "Verified file: $file"
+          }
+        }
+      shell: pwsh
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        # Additional dependencies for G2 integration
-        pip install pyserial
-        pip install reportlab
-        pip install psutil
-        pip install packaging
+        
+        # Install additional dependencies
+        $additionalPackages = @(
+          "pyserial==3.5",
+          "reportlab==4.0.7",
+          "psutil==5.9.8",
+          "pillow>=10.0.0",
+          "pyyaml>=6.0.1"
+        )
+        
+        foreach ($package in $additionalPackages) {
+          pip install $package
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to install: $package"
+          }
+        }
+      shell: pwsh
 
     - name: Update requirements.txt
       run: |
-        echo "pyinstaller==5.14" > requirements.txt
-        echo "PySide6==6.7.1" >> requirements.txt
-        echo "requests==2.31.0" >> requirements.txt
-        echo "packaging==24.0" >> requirements.txt
-        echo "pyserial==3.5" >> requirements.txt
-        echo "reportlab==4.0.7" >> requirements.txt
-        echo "psutil==5.9.8" >> requirements.txt
+        @"
+        pyinstaller==5.14
+        PySide6==6.7.1
+        requests==2.31.0
+        packaging==24.0
+        pyserial==3.5
+        reportlab==4.0.7
+        psutil==5.9.8
+        pillow>=10.0.0
+        pyyaml>=6.0.1
+        "@ | Set-Content -Path requirements.txt
+        
+        Write-Host "Updated requirements.txt:"
+        Get-Content requirements.txt
+      shell: pwsh
 
     - name: Generate Assets
       run: |
-        python src/assets/generate_full_assets.py
+        try {
+          python src/assets/generate_full_assets.py
+          Write-Host "Assets generated successfully"
+        }
+        catch {
+          throw "Asset generation failed: $_"
+        }
+      shell: pwsh
 
     - name: Build with PyInstaller
       run: |
-        pyinstaller --noconfirm --onefile --windowed `
-          --add-data "assets;assets" `
-          --add-data "src/timing;timing" `
-          --add-data "src/gui;gui" `
-          --add-data "src/reports;reports" `
-          --icon "assets/icon.ico" `
-          --name time-machine `
-          src/main.py
+        $ErrorActionPreference = 'Stop'
+        
+        # Prepare build command
+        $buildCommand = @(
+          "pyinstaller",
+          "--noconfirm",
+          "--onefile",
+          "--windowed",
+          "--add-data", "assets;assets",
+          "--add-data", "src/timing;timing",
+          "--add-data", "src/gui;gui",
+          "--add-data", "src/reports;reports",
+          "--icon", "assets/icon.ico",
+          "--name", "time-machine",
+          "src/main.py"
+        )
+        
+        # Execute build
+        Write-Host "Starting PyInstaller build..."
+        & $buildCommand
+        
+        if ($LASTEXITCODE -ne 0) {
+          throw "PyInstaller build failed with exit code: $LASTEXITCODE"
+        }
+        
+        # Verify output
+        if (!(Test-Path "dist/time-machine.exe")) {
+          throw "Build failed: executable not found"
+        }
+        
+        Write-Host "Build completed successfully"
+      shell: pwsh
 
-    - name: Create Distribution Directory
+    - name: Create Distribution Package
       run: |
-        mkdir dist-package
-        copy dist\time-machine.exe dist-package\
-        copy assets\* dist-package\
-        copy README.md dist-package\
-        copy CHANGELOG.md dist-package\
+        # Create clean distribution directory
+        Remove-Item -Path dist-package -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -Path dist-package -ItemType Directory
+        
+        # Copy required files
+        $filesToCopy = @(
+          @{Source="dist/time-machine.exe"; Dest="dist-package/"},
+          @{Source="assets/*"; Dest="dist-package/assets/"},
+          @{Source="README.md"; Dest="dist-package/"},
+          @{Source="CHANGELOG.md"; Dest="dist-package/"}
+        )
+        
+        foreach ($file in $filesToCopy) {
+          Copy-Item -Path $file.Source -Destination $file.Dest -Recurse -Force
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to copy: $($file.Source)"
+          }
+        }
+        
+        # Create version info file
+        @"
+        Build Date: $env:BUILD_TIMESTAMP
+        Builder: $env:OWNER
+        "@ | Set-Content -Path "dist-package/version.txt"
+      shell: pwsh
 
-    - name: Create ZIP archive
+    - name: Create ZIP Archive
       run: |
-        Compress-Archive -Path dist-package\* -DestinationPath time-machine-windows.zip
+        $zipPath = "time-machine-windows.zip"
+        
+        # Remove existing zip if present
+        if (Test-Path $zipPath) {
+          Remove-Item $zipPath -Force
+        }
+        
+        # Create zip archive
+        Compress-Archive -Path dist-package/* -DestinationPath $zipPath
+        
+        # Verify zip creation
+        if (!(Test-Path $zipPath)) {
+          throw "Failed to create ZIP archive"
+        }
+        
+        # Output zip size
+        $zipSize = (Get-Item $zipPath).Length / 1MB
+        Write-Host "Created ZIP archive: $([math]::Round($zipSize, 2)) MB"
+      shell: pwsh
 
     - name: Upload Build Artifact
-      uses: actions/upload-artifact@v4  # Updated from v3 to v4
+      uses: actions/upload-artifact@v4
       with:
         name: time-machine-windows
         path: time-machine-windows.zip
-        retention-days: 90  # Specify how long to keep the artifact
+        retention-days: 90
+        if-no-files-found: error
 
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v2  # Updated to use more modern release action
+      uses: softprops/action-gh-release@v2
       with:
         files: time-machine-windows.zip
         name: Release ${{ github.ref_name }}
         body: |
-          Time Machine ${{ github.ref_name }}
+          # Time Machine Release ${{ github.ref_name }}
           
-          This release includes:
-          - Automatic updates
-          - G2 integration
+          Built on: ${{ env.BUILD_TIMESTAMP }}
+          
+          ## What's New
+          - Automatic updates enabled
+          - G2 timing system integration
           - Enhanced error handling
-          - Multiple export formats
+          - Multiple export formats (CSV, PDF, HY3, CL2)
           
-          Installation:
+          ## Installation
           1. Download time-machine-windows.zip
           2. Extract the contents
           3. Run time-machine.exe
+          
+          ## Auto-Updates
+          - The application will automatically check for and install updates
+          - No manual downloads required after initial installation
+          
+          ## System Requirements
+          - Windows 10 or later
+          - 4GB RAM minimum
+          - 500MB disk space
+          
+          ## Support
+          For support, please open an issue in the repository.
+        
         draft: false
         prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-permissions:
-  contents: write  # Required for creating releases
-  actions: read    # Required for workflow
+    - name: Cleanup
+      if: always()
+      run: |
+        # Clean up build artifacts
+        Remove-Item -Path dist -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path build -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path dist-package -Recurse -Force -ErrorAction SilentlyContinue
+        
+        Write-Host "Cleanup completed"
+      shell: pwsh
