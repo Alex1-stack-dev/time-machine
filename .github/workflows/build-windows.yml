@@ -1,4 +1,4 @@
-# GitHub Actions workflow to build a Windows .zip containing a standalone .exe using cx_Freeze
+# Update: install a matching cx-Freeze version explicitly on the Windows runner
 name: Build Windows Executable
 
 on:
@@ -25,14 +25,32 @@ jobs:
       - name: Upgrade pip
         run: python -m pip install --upgrade pip
 
-      - name: Install dependencies
+      - name: Install dependencies (without cx-Freeze)
         run: |
           python -m pip install -r requirements.txt || echo "requirements.txt may be missing or empty"
-          python -m pip install cx-Freeze==6.14
+          # Install a specific, available cx-Freeze version only on the Windows runner:
+          python -m pip install "cx-Freeze==6.15.16"
 
       - name: Run cx_Freeze build
         run: |
           python setup_cx_freeze.py build
+
+      - name: Show build output (diagnostics)
+        shell: pwsh
+        run: |
+          Write-Host "==== Listing repo root ===="
+          Get-ChildItem -Force -Recurse -Depth 1 | ForEach-Object { Write-Host $_ }
+          Write-Host "==== Listing 'build' directory (if exists) ===="
+          if (Test-Path build) {
+            Get-ChildItem -Path build -Recurse | ForEach-Object { Write-Host $_ }
+          } else {
+            Write-Host "No build directory found"
+          }
+          Write-Host "==== Python info ===="
+          python -V
+          python -m pip --version
+          Write-Host "==== Installed packages (top 50) ===="
+          python -m pip list --format=columns | Select-Object -First 50 | ForEach-Object { Write-Host $_ }
 
       - name: Compress and upload artifact
         shell: pwsh
@@ -42,7 +60,6 @@ jobs:
             if (Test-Path $zipname) { Remove-Item $zipname -Force }
             Compress-Archive -Path build\* -DestinationPath $zipname -Force
             Write-Host "Created zip:" $zipname
-            echo "::set-output name=zip::$zipname"
           } else {
             Write-Error "Build folder not found. Build may have failed."
             exit 1
