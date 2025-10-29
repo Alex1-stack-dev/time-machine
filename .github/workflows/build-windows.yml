@@ -1,7 +1,3 @@
-# Time Machine Build Workflow
-# Last updated: 2025-10-29 21:33:01 UTC
-# Repository: Alex1-stack-dev/time-machine
-# Author: kuhafsoiusygdfouysd
 
 name: Build Windows Executable
 
@@ -24,6 +20,7 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
+        cache: 'pip'
 
     - name: Install Dependencies
       run: |
@@ -38,55 +35,81 @@ jobs:
         pip install pyyaml
       shell: cmd
 
-    - name: Create Application Structure
+    - name: Create Installation Files
       run: |
-        mkdir src\timing
-        mkdir src\gui
-        mkdir src\reports
-        mkdir assets
+        mkdir package
+        mkdir package\assets
+        mkdir package\config
+        mkdir package\database
+        mkdir package\templates
         
-        echo import sys, os > src\main.py
-        echo from PySide6 import QtWidgets, QtCore, QtGui >> src\main.py
-        echo from pathlib import Path >> src\main.py
-        echo VERSION = "${{ github.event.inputs.version }}" >> src\main.py
-        echo. >> src\main.py
-        echo class MainWindow(QtWidgets.QMainWindow): >> src\main.py
-        echo     def __init__(self): >> src\main.py
-        echo         super().__init__() >> src\main.py
-        echo         self.setWindowTitle(f"Time Machine {VERSION}") >> src\main.py
-        echo         self.resize(800, 600) >> src\main.py
-        echo         self._setup_ui() >> src\main.py
-        echo. >> src\main.py
-        echo     def _setup_ui(self): >> src\main.py
-        echo         self.central = QtWidgets.QWidget() >> src\main.py
-        echo         self.setCentralWidget(self.central) >> src\main.py
-        echo         layout = QtWidgets.QVBoxLayout(self.central) >> src\main.py
-        echo. >> src\main.py
-        echo def main(): >> src\main.py
-        echo     app = QtWidgets.QApplication(sys.argv) >> src\main.py
-        echo     window = MainWindow() >> src\main.py
-        echo     window.show() >> src\main.py
-        echo     sys.exit(app.exec()) >> src\main.py
-        echo. >> src\main.py
-        echo if __name__ == "__main__": >> src\main.py
-        echo     main() >> src\main.py
-
-        echo # Timing module > src\timing\__init__.py
-        echo # GUI module > src\gui\__init__.py
-        echo # Reports module > src\reports\__init__.py
+        REM Create database directory for meet data
+        echo {} > package\database\meets.json
+        
+        REM Create config files
+        echo {> package\config\settings.json
+        echo   "version": "${{ github.event.inputs.version }}",>> package\config\settings.json
+        echo   "last_updated": "2025-10-29 21:40:47",>> package\config\settings.json
+        echo   "g2_default_port": "COM1",>> package\config\settings.json
+        echo   "database_path": "database/meets.json",>> package\config\settings.json
+        echo   "auto_update": true>> package\config\settings.json
+        echo }>> package\config\settings.json
+        
+        REM Create templates
+        echo {> package\templates\meet_report.html
+        echo   "title": "Meet Results Template",>> package\templates\meet_report.html
+        echo   "version": "1.0">> package\templates\meet_report.html
+        echo }>> package\templates\meet_report.html
+        
+        REM Create installation guide
+        echo Time Machine Installation Guide> package\INSTALL.txt
+        echo Version: ${{ github.event.inputs.version }}>> package\INSTALL.txt
+        echo Built: 2025-10-29 21:40:47>> package\INSTALL.txt
+        echo. >> package\INSTALL.txt
+        echo Requirements:>> package\INSTALL.txt
+        echo - Windows 10 or later>> package\INSTALL.txt
+        echo - 4GB RAM minimum>> package\INSTALL.txt
+        echo - USB port for G2 connection>> package\INSTALL.txt
+        echo. >> package\INSTALL.txt
+        echo Installation:>> package\INSTALL.txt
+        echo 1. Extract ALL files maintaining directory structure>> package\INSTALL.txt
+        echo 2. Run time-machine.exe>> package\INSTALL.txt
+        echo 3. Configure G2 connection in settings>> package\INSTALL.txt
+        echo. >> package\INSTALL.txt
+        echo Directory Structure:>> package\INSTALL.txt
+        echo - assets/: Required graphics and resources>> package\INSTALL.txt
+        echo - config/: Program settings>> package\INSTALL.txt
+        echo - database/: Meet data storage>> package\INSTALL.txt
+        echo - templates/: Report templates>> package\INSTALL.txt
       shell: cmd
 
-    - name: Create PyInstaller Spec
+    - name: Build with PyInstaller
       run: |
         echo # -*- mode: python -*- > time-machine.spec
+        echo from PyInstaller.utils.hooks import collect_data_files >> time-machine.spec
         echo block_cipher = None >> time-machine.spec
         echo a = Analysis(['src/main.py'], >> time-machine.spec
         echo     pathex=[], >> time-machine.spec
         echo     binaries=[], >> time-machine.spec
-        echo     datas=[('assets', 'assets'), ('src/timing', 'timing'), ('src/gui', 'gui'), ('src/reports', 'reports')], >> time-machine.spec
-        echo     hiddenimports=['PySide6.QtCore', 'PySide6.QtGui', 'PySide6.QtWidgets', 'serial', 'reportlab', 'psutil'], >> time-machine.spec
+        echo     datas=[ >> time-machine.spec
+        echo         ('assets', 'assets'), >> time-machine.spec
+        echo         ('config', 'config'), >> time-machine.spec
+        echo         ('database', 'database'), >> time-machine.spec
+        echo         ('templates', 'templates'), >> time-machine.spec
+        echo         ('src/timing', 'timing'), >> time-machine.spec
+        echo         ('src/gui', 'gui'), >> time-machine.spec
+        echo         ('src/reports', 'reports') >> time-machine.spec
+        echo     ], >> time-machine.spec
+        echo     hiddenimports=[ >> time-machine.spec
+        echo         'PySide6.QtCore', >> time-machine.spec
+        echo         'PySide6.QtGui', >> time-machine.spec
+        echo         'PySide6.QtWidgets', >> time-machine.spec
+        echo         'serial', >> time-machine.spec
+        echo         'reportlab', >> time-machine.spec
+        echo         'psutil', >> time-machine.spec
+        echo         'yaml' >> time-machine.spec
+        echo     ], >> time-machine.spec
         echo     hookspath=[], >> time-machine.spec
-        echo     hooksconfig={}, >> time-machine.spec
         echo     runtime_hooks=[], >> time-machine.spec
         echo     excludes=[], >> time-machine.spec
         echo     win_no_prefer_redirects=False, >> time-machine.spec
@@ -105,55 +128,41 @@ jobs:
         echo     bootloader_ignore_signals=False, >> time-machine.spec
         echo     strip=False, >> time-machine.spec
         echo     upx=True, >> time-machine.spec
-        echo     upx_exclude=[], >> time-machine.spec
         echo     runtime_tmpdir=None, >> time-machine.spec
         echo     console=False, >> time-machine.spec
-        echo     disable_windowed_traceback=False, >> time-machine.spec
-        echo     target_arch=None) >> time-machine.spec
+        echo     disable_windowed_traceback=False) >> time-machine.spec
+        
+        pyinstaller time-machine.spec
       shell: cmd
 
-    - name: Build with PyInstaller
-      run: pyinstaller time-machine.spec
-      shell: cmd
-
-    - name: Create Distribution Package
+    - name: Create Complete Package
       run: |
-        mkdir package
-        mkdir package\assets
-        copy dist\time-machine.exe package\
+        REM Create final package with all components
+        mkdir complete-package
+        copy dist\time-machine.exe complete-package\
+        xcopy /E /I package\* complete-package\
         
-        echo {> package\config.json
-        echo   "version": "${{ github.event.inputs.version }}",>> package\config.json
-        echo   "build_date": "2025-10-29 21:33:01",>> package\config.json
-        echo   "builder": "kuhafsoiusygdfouysd">> package\config.json
-        echo }>> package\config.json
+        REM Create version marker
+        echo ${{ github.event.inputs.version }}> complete-package\version.txt
         
-        echo # Time Machine Documentation> package\README.txt
-        echo Version: ${{ github.event.inputs.version }}>> package\README.txt
-        echo Built: 2025-10-29 21:33:01>> package\README.txt
-        echo. >> package\README.txt
-        echo Installation:>> package\README.txt
-        echo 1. Extract all files>> package\README.txt
-        echo 2. Run time-machine.exe>> package\README.txt
-        echo. >> package\README.txt
-        echo Required Files:>> package\README.txt
-        echo - time-machine.exe>> package\README.txt
-        echo - assets/ folder>> package\README.txt
-        echo - config.json>> package\README.txt
+        REM Add G2 driver info
+        echo G2 Connection Setup> complete-package\G2_SETUP.txt
+        echo 1. Connect G2 device via USB>> complete-package\G2_SETUP.txt
+        echo 2. Note the COM port number>> complete-package\G2_SETUP.txt
+        echo 3. Enter the COM port in settings>> complete-package\G2_SETUP.txt
+        
+        REM Create shortcut
+        powershell "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('complete-package\Time Machine.lnk'); $s.TargetPath = 'complete-package\time-machine.exe'; $s.Save()"
       shell: cmd
 
-    - name: Create ZIP
-      run: powershell Compress-Archive package\* time-machine-${{ github.event.inputs.version }}-windows.zip
+    - name: Create Installation ZIP
+      run: |
+        powershell Compress-Archive complete-package\* TimeMachine-${{ github.event.inputs.version }}-Full.zip
       shell: cmd
 
-    - name: Upload Artifact
+    - name: Upload Package
       uses: actions/upload-artifact@v4
       with:
-        name: time-machine-${{ github.event.inputs.version }}
-        path: time-machine-${{ github.event.inputs.version }}-windows.zip
+        name: TimeMachine-${{ github.event.inputs.version }}-Full
+        path: TimeMachine-${{ github.event.inputs.version }}-Full.zip
         retention-days: 90
-        Remove-Item -Path dist -Recurse -Force -ErrorAction SilentlyContinue
-        Remove-Item -Path build -Recurse -Force -ErrorAction SilentlyContinue
-        Remove-Item -Path dist-package -Recurse -Force -ErrorAction SilentlyContinue
-        Write-Host "Cleanup completed"
-      shell: pwsh
